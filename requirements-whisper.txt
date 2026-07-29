@@ -1,0 +1,2 @@
+-r requirements-dev.txt
+openai-whisper>=20240930
