@@ -1,0 +1,35 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "tests",
+    "components",
+]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "-ra",
+]
+markers = [
+    "unit: fast tests isolated from external services",
+    "integration: tests involving multiple modules or external services",
+    "e2e: complete user or system workflows",
+    "slow: tests that are expensive or take substantial time",
+    "requires_gpu: tests that require compatible GPU hardware",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+pretty = true
+
