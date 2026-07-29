@@ -47,6 +47,7 @@ def test_transcribe_normalizes_text_language_and_segments(audio_file: Path) -> N
     )
     engine = PythonWhisperEngine(
         "small",
+        device="cpu",
         model_loader=lambda _name, _device, _root: model,
     )
 
@@ -64,7 +65,12 @@ def test_transcribe_normalizes_text_language_and_segments(audio_file: Path) -> N
     assert model.calls == [
         (
             str(audio_file),
-            {"verbose": False, "word_timestamps": True, "language": "en"},
+            {
+                "verbose": False,
+                "word_timestamps": True,
+                "language": "en",
+                "fp16": False,
+            },
         )
     ]
 

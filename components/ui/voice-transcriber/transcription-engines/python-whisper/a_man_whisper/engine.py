@@ -71,6 +71,7 @@ class PythonWhisperEngine:
             raise ValueError("model_name must not be empty")
 
         self.model_name = model_name
+        self.device = device
         self._model = model_loader(
             model_name,
             device,
@@ -96,6 +97,8 @@ class PythonWhisperEngine:
         }
         if language is not None:
             options["language"] = language
+        if self.device == "cpu":
+            options["fp16"] = False
 
         try:
             raw_result = self._model.transcribe(str(path), **options)
