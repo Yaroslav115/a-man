@@ -1,5 +1,42 @@
 # Task Journal
 
+## 2026-07-30 — Add the transcriber Docker Compose stack
+
+- Status: completed
+- Request: Create Docker images and Compose services for the backend, worker,
+  Redis, and PostgreSQL.
+- Changes:
+  - Added separate FastAPI, CPU-only Whisper worker, and migration image targets.
+  - Added PostgreSQL 16 and Redis 7 services with health checks and persistence.
+  - Added shared audio storage and persistent Whisper model cache volumes.
+  - Added a repeatable migration runner with a `schema_migrations` ledger.
+  - Added a development environment template and operation documentation.
+- Verification: Compose configuration resolves successfully; all project images
+  build; PostgreSQL and Redis become healthy; migration `001` applies; Celery
+  registers `voice_transcriber.transcribe`; and the API OpenAPI endpoint returns
+  HTTP 200 with a healthy container state.
+- Next: Add Compose-backed integration tests and a GPU worker override.
+
+## 2026-07-30 — Implement asynchronous transcription submission core
+
+- Status: completed
+- Request: Create the FastAPI backend with one server-path route and one upload
+  route, and process audio asynchronously through Redis, Celery, and PostgreSQL.
+- Decision: Keep file submission on HTTP. Reserve WebSocket for future live
+  microphone streaming; use a future status endpoint or Server-Sent Events for
+  file-job progress.
+- Changes:
+  - Added two HTTP `202` submission routes with a shared response contract.
+  - Persist uploaded audio to worker-visible storage before submission.
+  - Added PostgreSQL job and append-only event schemas.
+  - Use one UUID as public job ID and Celery task ID.
+  - Added Redis queued-state caching and Celery publication.
+  - Added a Celery worker task that records processing, completion, and failure.
+  - Added isolated route and submission-service tests.
+- Constraint: API and worker must mount the same audio-storage volume.
+- Next: Add job status/result and cancellation endpoints, deployment services,
+  database migration execution, authentication, and retention policy.
+
 ## 2026-07-28 — Implement the initial GitLab pipeline
 
 - Status: completed

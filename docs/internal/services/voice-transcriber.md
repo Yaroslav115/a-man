@@ -5,13 +5,13 @@
 | Field | Current value |
 |---|---|
 | Owner | TBD |
-| Status | structure created; not implemented |
+| Status | asynchronous submission and worker core implemented |
 | Version | 0.1 |
 | Environment | local development |
 | Repository/path | `components/ui/voice-transcriber/` |
-| Runtime | Docker Compose stack, planned |
+| Runtime | Docker Compose stack |
 | Deployment target | TBD |
-| Last verified | 2026-07-27 |
+| Last verified | 2026-07-30 |
 
 ## Purpose
 
@@ -24,11 +24,11 @@ remaining usable as a standalone module.
 |---|---|---|
 | Reusable widget | Web frontend, TBD | Directory created |
 | Standalone demo | Web frontend, TBD | Directory created |
-| Public backend | FastAPI | Directory created |
-| Task orchestration | Celery | Directory created |
-| Queue/broker | Redis | Planned |
-| Persistent data | PostgreSQL | Migration directory created |
-| Initial transcription engine | Python Whisper | Directory created |
+| Public backend | FastAPI | Two HTTP submission routes implemented |
+| Task orchestration | Celery | Transcription task implemented |
+| Queue/broker | Redis | Queue and TTL state cache integrated |
+| Persistent data | PostgreSQL | Initial job/event migration implemented |
+| Initial transcription engine | Python Whisper | Worker adapter implemented |
 | Optimized transcription engine | whisper.cpp | Reserved directory created |
 
 ## Architecture constraint
@@ -39,8 +39,24 @@ replaced by whisper.cpp without changing the public API or task workflow.
 
 ## Interfaces and configuration
 
-Not yet defined. No ports, credentials, model names, image tags, or runtime
-parameter values have been selected.
+- `POST /v1/transcriptions/path` queues a shared server-local path.
+- `POST /v1/transcriptions/upload` persists and queues an uploaded file.
+- `TRANSCRIBER_DATABASE_URL` configures PostgreSQL.
+- `TRANSCRIBER_REDIS_URL` configures the Celery broker/result backend and state.
+- `TRANSCRIBER_AUDIO_ROOT` configures shared uploaded-audio storage.
+- `TRANSCRIBER_MODEL`, `TRANSCRIBER_DEVICE`, and
+  `TRANSCRIBER_MODEL_CACHE` configure the initial Whisper engine.
+- `TRANSCRIBER_REDIS_STATE_TTL_SECONDS` controls transient state retention.
+
+PostgreSQL is authoritative; Redis state is a disposable acceleration layer.
+
+## Local operation
+
+The Compose definition is
+`components/ui/voice-transcriber/deploy/compose.yaml`. It builds distinct API,
+worker, and migration targets and runs official PostgreSQL 16 Alpine and Redis 7
+Alpine images. Development values are documented in `.env.example`; real
+credentials belong only in the ignored `.env` file.
 
 ## Runtime task journaling
 
@@ -62,4 +78,6 @@ production use. Secrets must not be stored in this document.
 
 | Date | Change | Author/agent |
 |---|---|---|
+| 2026-07-30 | Added API, CPU Whisper worker, and migration images plus PostgreSQL/Redis Compose services and persistent volumes | Codex |
+| 2026-07-30 | Implemented asynchronous API submission, job journal migration, Redis/Celery publication, and worker lifecycle updates | Codex |
 | 2026-07-27 | Created initial directory structure and engine-replacement boundary | Codex |

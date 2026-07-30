@@ -1,0 +1,112 @@
+name: a-man-voice-transcriber
+
+x-runtime-environment: &runtime-environment
+  TRANSCRIBER_DATABASE_URL: >-
+    postgresql://${TRANSCRIBER_POSTGRES_USER:-transcriber}:${TRANSCRIBER_POSTGRES_PASSWORD:-transcriber-dev}@postgres:5432/${TRANSCRIBER_POSTGRES_DB:-transcriber}
+  TRANSCRIBER_REDIS_URL: redis://redis:6379/0
+  TRANSCRIBER_AUDIO_ROOT: /data/audio
+  TRANSCRIBER_MODEL: ${TRANSCRIBER_MODEL:-small}
+  TRANSCRIBER_DEVICE: ${TRANSCRIBER_DEVICE:-cpu}
+  TRANSCRIBER_MODEL_CACHE: /models
+  TRANSCRIBER_REDIS_STATE_TTL_SECONDS: ${TRANSCRIBER_REDIS_STATE_TTL_SECONDS:-86400}
+
+services:
+  api:
+    build:
+      context: ../../../..
+      dockerfile: components/ui/voice-transcriber/deploy/Dockerfile
+      target: api
+    environment: *runtime-environment
+    ports:
+      - "${TRANSCRIBER_API_PORT:-8000}:8000"
+    volumes:
+      - audio_data:/data/audio
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen("http://127.0.0.1:8000/openapi.json", timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../../../..
+      dockerfile: components/ui/voice-transcriber/deploy/Dockerfile
+      target: worker
+    environment: *runtime-environment
+    volumes:
+      - audio_data:/data/audio
+      - whisper_models:/models
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../../../..
+      dockerfile: components/ui/voice-transcriber/deploy/Dockerfile
+      target: migrator
+    environment:
+      TRANSCRIBER_DATABASE_URL: >-
+        postgresql://${TRANSCRIBER_POSTGRES_USER:-transcriber}:${TRANSCRIBER_POSTGRES_PASSWORD:-transcriber-dev}@postgres:5432/${TRANSCRIBER_POSTGRES_DB:-transcriber}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${TRANSCRIBER_POSTGRES_DB:-transcriber}
+      POSTGRES_USER: ${TRANSCRIBER_POSTGRES_USER:-transcriber}
+      POSTGRES_PASSWORD: ${TRANSCRIBER_POSTGRES_PASSWORD:-transcriber-dev}
+    ports:
+      - "${TRANSCRIBER_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready
+          -U ${TRANSCRIBER_POSTGRES_USER:-transcriber}
+          -d ${TRANSCRIBER_POSTGRES_DB:-transcriber}
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${TRANSCRIBER_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  audio_data:
+  postgres_data:
+  redis_data:
+  whisper_models:

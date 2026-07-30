@@ -4,12 +4,13 @@
 
 | Field | Current value |
 |---|---|
-| Status | Structure only |
+| Status | Initial asynchronous submission and worker core implemented |
 | Initial transcription engine | Python Whisper |
 | Planned optimized engine | whisper.cpp |
 | Public backend | FastAPI |
 | Task processing | Celery with Redis |
 | Persistent database | PostgreSQL |
+| Local deployment | Docker Compose |
 
 ## Component flow
 
@@ -29,6 +30,32 @@ Widget or standalone demo
  Python Whisper initially
  whisper.cpp later
 ```
+
+## Submission contract
+
+File transcription uses HTTP rather than WebSocket. The path and upload routes
+persist a job and its initial event in PostgreSQL, cache queued state in Redis,
+publish a Celery message whose task ID equals the public job UUID, and return
+HTTP `202`. Uploaded files are stored on a volume shared by the API and worker.
+
+WebSocket is reserved for a later live-audio streaming feature. A future status
+endpoint or Server-Sent Events stream can expose progress for file jobs without
+coupling submission to a long-lived connection.
+
+PostgreSQL is the durable source of truth. Redis contains transient queue data
+and a TTL-bound current-state cache; losing Redis state must not erase the job
+journal.
+
+## Container topology
+
+The development Compose stack runs separate API, Celery worker, migration,
+PostgreSQL, and Redis containers. Named volumes preserve PostgreSQL data, Redis
+AOF data, uploaded audio, and downloaded Whisper models. The API and worker
+share the audio volume; only the worker mounts the model cache. Health checks
+gate startup on PostgreSQL migration completion and Redis availability.
+
+The default worker image installs CPU-only PyTorch. GPU-specific images and
+Compose overrides remain future work.
 
 ## Replacement boundary
 
@@ -76,6 +103,11 @@ The task record should eventually include:
 - Result reference and normalized error details
 - Requesting user/session reference, subject to privacy requirements
 - Correlation identifier for logs and traces
+
+Migration `001_create_transcription_jobs.sql` establishes the initial
+`transcription_jobs` record and append-only `transcription_job_events` journal.
+The worker records processing and terminal transitions in both PostgreSQL and
+the Redis state cache.
 
 Sensitive audio, transcript content, secrets, and credentials must not be copied
 into audit events unnecessarily. Retention and deletion rules remain TBD.

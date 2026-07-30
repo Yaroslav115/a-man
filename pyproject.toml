@@ -1,6 +1,8 @@
 [tool.pytest.ini_options]
 minversion = "8.0"
 pythonpath = [
+    "components/ui/voice-transcriber/api",
+    "components/ui/voice-transcriber/task-worker",
     "components/ui/voice-transcriber/transcription-engines/python-whisper",
 ]
 testpaths = [
