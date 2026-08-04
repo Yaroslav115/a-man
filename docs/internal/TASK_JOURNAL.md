@@ -1,5 +1,22 @@
 # Task Journal
 
+## 2026-08-04 — Formalize Python 3.11+ support
+
+- Status: completed
+- Request: Formally move the project from its stale Python 3.10 tooling target to
+  Python 3.11 or newer.
+- Decision: Support Python 3.11 and 3.12, with Python 3.12 as the preferred local
+  and container runtime. Defer Python 3.13 until the Whisper scientific dependency
+  stack is explicitly verified there.
+- Changes:
+  - Added project metadata declaring `requires-python = ">=3.11,<3.13"`.
+  - Updated Ruff and mypy to use Python 3.11 as the minimum language target.
+  - Added `.python-version` selecting Python 3.12 for compatible version managers.
+  - Documented the supported versions and local test setup.
+- Verification: Ruff, formatting, mypy, and diff checks pass. The default test
+  suite passes in a Python 3.12 container: 13 passed and one opt-in Whisper
+  integration test was deselected.
+
 ## 2026-07-30 — Add the transcriber Docker Compose stack
 
 - Status: completed

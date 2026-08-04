@@ -18,5 +18,6 @@ All communication between the UI and an agent passes through the controller.
 - Installation: to be defined
 - Configuration: to be defined
 - Usage: to be defined
-- Development and testing: to be defined
+- Development and testing: Python 3.11 or 3.12 is required; Python 3.12 is the
+  preferred local version. See `../../tests/README.md` for setup and test commands.
 - Deployment and operations: to be defined
