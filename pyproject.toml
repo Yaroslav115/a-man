@@ -43,7 +43,10 @@ python_version = "3.11"
 strict = true
 warn_unreachable = true
 pretty = true
-mypy_path = "components/ui/voice-transcriber/transcription-engines/python-whisper"
+mypy_path = [
+    "components/ui/voice-transcriber/database",
+    "components/ui/voice-transcriber/transcription-engines/python-whisper",
+]
 
 [[tool.mypy.overrides]]
 module = ["celery", "celery.*"]
