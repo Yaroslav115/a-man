@@ -18,7 +18,7 @@ implemented.
 | `task-worker/` | Celery task orchestration |
 | `transcription-engines/` | Replaceable speech-to-text implementations |
 | `contracts/` | Stable API and engine-boundary definitions |
-| `database/` | PostgreSQL migrations and database assets |
+| `database/` | Shared SQLAlchemy mappings and Alembic migrations |
 | `deploy/` | Docker and deployment assets |
 | `tests/` | Stack-level integration and end-to-end tests |
 | `docs/` | Module-specific design and usage documentation |
@@ -55,8 +55,9 @@ Use `docker compose down` to stop containers while preserving data. Use
 data should also be deleted.
 
 The stack contains `api`, `worker`, `migrate`, `postgres`, and `redis`. The
-one-shot migration service applies each SQL migration once and records it in
-`schema_migrations`.
+one-shot migration service runs `alembic upgrade head`; Alembic records the
+active revision in `alembic_version`. Both API and worker use the mappings in
+`database/a_man_database` so schema types and constraints have one definition.
 
 ## Engine strategy
 

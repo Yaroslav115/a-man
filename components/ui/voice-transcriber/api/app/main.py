@@ -5,11 +5,18 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
+from a_man_database import sqlalchemy_url
 from celery import Celery
 from fastapi import FastAPI
-from psycopg_pool import AsyncConnectionPool
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.routes.transcriptions import create_transcription_router
 from app.services.postgres import PostgresJobRepository
@@ -19,16 +26,21 @@ from app.services.transcription import TranscriptionSubmissionService
 
 
 @lru_cache(maxsize=1)
-def get_pool() -> AsyncConnectionPool:
-    return AsyncConnectionPool(
-        os.environ["TRANSCRIBER_DATABASE_URL"],
-        open=False,
+def get_engine() -> AsyncEngine:
+    return create_async_engine(
+        sqlalchemy_url(os.environ["TRANSCRIBER_DATABASE_URL"]),
+        pool_pre_ping=True,
     )
 
 
 @lru_cache(maxsize=1)
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(get_engine(), expire_on_commit=False)
+
+
+@lru_cache(maxsize=1)
 def get_redis() -> Redis:
-    return Redis.from_url(os.environ["TRANSCRIBER_REDIS_URL"])
+    return cast(Redis, Redis.from_url(os.environ["TRANSCRIBER_REDIS_URL"]))
 
 
 @lru_cache(maxsize=1)
@@ -39,7 +51,7 @@ def get_celery_app() -> Celery:
 
 def get_submission_service() -> TranscriptionSubmissionService:
     return TranscriptionSubmissionService(
-        PostgresJobRepository(get_pool()),
+        PostgresJobRepository(get_session_factory()),
         RedisCeleryTaskQueue(
             get_celery_app(),
             get_redis(),
@@ -66,16 +78,11 @@ def create_app() -> FastAPI:
         create_transcription_router(get_submission_service, get_audio_storage)
     )
 
-    @application.on_event("startup")
-    async def open_database_pool() -> None:
-        if get_submission_service not in application.dependency_overrides:
-            await get_pool().open()
-
     @application.on_event("shutdown")
     async def close_connections() -> None:
         if get_submission_service not in application.dependency_overrides:
             await get_redis().aclose()
-            await get_pool().close()
+            await get_engine().dispose()
 
     return application
 

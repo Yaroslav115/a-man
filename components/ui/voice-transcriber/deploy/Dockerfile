@@ -4,7 +4,8 @@ FROM python:3.12-slim AS api
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/opt/a-man/api:/opt/a-man/database
 
 RUN groupadd --system transcriber \
     && useradd --system --gid transcriber --create-home transcriber
@@ -17,6 +18,7 @@ COPY requirements-api.txt .
 RUN python -m pip install --no-cache-dir -r requirements-api.txt
 
 COPY components/ui/voice-transcriber/api ./api
+COPY components/ui/voice-transcriber/database ./database
 
 USER transcriber
 WORKDIR /opt/a-man/api
@@ -31,7 +33,7 @@ FROM python:3.12-slim AS worker
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/opt/a-man/task-worker:/opt/a-man/python-whisper
+    PYTHONPATH=/opt/a-man/task-worker:/opt/a-man/python-whisper:/opt/a-man/database
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ffmpeg \
@@ -53,6 +55,7 @@ RUN python -m pip install --no-cache-dir -r requirements-worker.txt \
         "openai-whisper>=20240930"
 
 COPY components/ui/voice-transcriber/task-worker ./task-worker
+COPY components/ui/voice-transcriber/database ./database
 COPY components/ui/voice-transcriber/transcription-engines/python-whisper \
     ./python-whisper
 
@@ -61,10 +64,18 @@ USER transcriber
 CMD ["celery", "-A", "worker_app.celery_app:app", "worker", "--loglevel=INFO"]
 
 
-FROM postgres:16-alpine AS migrator
+FROM python:3.12-slim AS migrator
 
-COPY components/ui/voice-transcriber/database/migrations /migrations
-COPY components/ui/voice-transcriber/deploy/migrate.sh /usr/local/bin/migrate
-RUN chmod 755 /usr/local/bin/migrate
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/opt/a-man/database
 
-ENTRYPOINT ["migrate"]
+WORKDIR /opt/a-man
+
+COPY requirements-migrator.txt .
+RUN python -m pip install --no-cache-dir -r requirements-migrator.txt
+
+COPY components/ui/voice-transcriber/database ./database
+
+CMD ["alembic", "-c", "/opt/a-man/database/alembic.ini", "upgrade", "head"]

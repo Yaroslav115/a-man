@@ -27,7 +27,7 @@ remaining usable as a standalone module.
 | Public backend | FastAPI | Two HTTP submission routes implemented |
 | Task orchestration | Celery | Transcription task implemented |
 | Queue/broker | Redis | Queue and TTL state cache integrated |
-| Persistent data | PostgreSQL | Initial job/event migration implemented |
+| Persistent data | PostgreSQL with SQLAlchemy 2.x | Initial Alembic job/event revision implemented |
 | Initial transcription engine | Python Whisper | Worker adapter implemented |
 | Optimized transcription engine | whisper.cpp | Reserved directory created |
 
@@ -49,6 +49,8 @@ replaced by whisper.cpp without changing the public API or task workflow.
 - `TRANSCRIBER_REDIS_STATE_TTL_SECONDS` controls transient state retention.
 
 PostgreSQL is authoritative; Redis state is a disposable acceleration layer.
+The API and worker share SQLAlchemy mappings, while Alembic owns schema
+evolution and is executed by the Compose `migrate` service.
 
 ## Local operation
 
@@ -80,4 +82,5 @@ production use. Secrets must not be stored in this document.
 |---|---|---|
 | 2026-07-30 | Added API, CPU Whisper worker, and migration images plus PostgreSQL/Redis Compose services and persistent volumes | Codex |
 | 2026-07-30 | Implemented asynchronous API submission, job journal migration, Redis/Celery publication, and worker lifecycle updates | Codex |
+| 2026-08-05 | Replaced direct Psycopg SQL and the custom migration ledger with shared SQLAlchemy mappings and Alembic revisions | Codex |
 | 2026-07-27 | Created initial directory structure and engine-replacement boundary | Codex |

@@ -7,6 +7,7 @@ requires-python = ">=3.11,<3.13"
 minversion = "8.0"
 pythonpath = [
     "components/ui/voice-transcriber/api",
+    "components/ui/voice-transcriber/database",
     "components/ui/voice-transcriber/task-worker",
     "components/ui/voice-transcriber/transcription-engines/python-whisper",
 ]
@@ -43,3 +44,11 @@ strict = true
 warn_unreachable = true
 pretty = true
 mypy_path = "components/ui/voice-transcriber/transcription-engines/python-whisper"
+
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["worker_app.tasks.transcribe"]
+disallow_untyped_decorators = false

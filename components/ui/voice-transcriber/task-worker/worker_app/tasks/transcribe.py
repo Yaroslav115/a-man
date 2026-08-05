@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
-import psycopg
+from a_man_database import TranscriptionJob, TranscriptionJobEvent, sqlalchemy_url
 from a_man_whisper import PythonWhisperEngine, TranscriptionResult
 from celery import Task
-from psycopg.types.json import Jsonb
 from redis import Redis
+from sqlalchemy import create_engine, update
+from sqlalchemy.orm import Session, sessionmaker
 
 from worker_app.celery_app import app
 
@@ -33,6 +36,15 @@ def _get_redis() -> Redis:
     return Redis.from_url(os.environ["TRANSCRIBER_REDIS_URL"])
 
 
+@lru_cache(maxsize=1)
+def _get_sessions() -> sessionmaker[Session]:
+    engine = create_engine(
+        sqlalchemy_url(os.environ["TRANSCRIBER_DATABASE_URL"]),
+        pool_pre_ping=True,
+    )
+    return sessionmaker(engine, expire_on_commit=False)
+
+
 @app.task(bind=True, name="voice_transcriber.transcribe")
 def transcribe(
     task: Task,
@@ -45,7 +57,7 @@ def transcribe(
 ) -> dict[str, Any]:
     """Run Whisper and synchronize PostgreSQL journal and Redis state."""
 
-    selected_model = model or os.getenv("TRANSCRIBER_MODEL", "small")
+    selected_model = model or os.getenv("TRANSCRIBER_MODEL") or "small"
     worker_id = getattr(task.request, "hostname", None)
     _set_processing(job_id, worker_id=worker_id, model=selected_model)
     _cache_state(job_id, "processing")
@@ -74,14 +86,13 @@ def _set_processing(job_id: str, *, worker_id: str | None, model: str) -> None:
     _transition(
         job_id,
         "processing",
-        updates="""
-            started_at = NOW(),
-            worker_id = %(worker_id)s,
-            requested_model = %(model)s,
-            engine_name = 'python-whisper',
-            attempt_number = attempt_number + 1
-        """,
-        parameters={"worker_id": worker_id, "model": model},
+        values={
+            "started_at": datetime.now(UTC),
+            "worker_id": worker_id,
+            "requested_model": model,
+            "engine_name": "python-whisper",
+            "attempt_number": TranscriptionJob.attempt_number + 1,
+        },
         payload={"worker_id": worker_id, "model": model},
     )
 
@@ -90,16 +101,11 @@ def _set_completed(job_id: str, *, result: dict[str, Any]) -> None:
     _transition(
         job_id,
         "completed",
-        updates="""
-            completed_at = NOW(),
-            transcript_text = %(text)s,
-            detected_language = %(language)s,
-            result = %(result)s
-        """,
-        parameters={
-            "text": result["text"],
-            "language": result["language"],
-            "result": Jsonb(result),
+        values={
+            "completed_at": datetime.now(UTC),
+            "transcript_text": result["text"],
+            "detected_language": result["language"],
+            "result": result,
         },
         payload={},
     )
@@ -109,8 +115,7 @@ def _set_failed(job_id: str, *, error: dict[str, str]) -> None:
     _transition(
         job_id,
         "failed",
-        updates="failed_at = NOW(), error = %(error)s",
-        parameters={"error": Jsonb(error)},
+        values={"failed_at": datetime.now(UTC), "error": error},
         payload={"error_type": error["type"]},
     )
 
@@ -119,32 +124,24 @@ def _transition(
     job_id: str,
     status: str,
     *,
-    updates: str,
-    parameters: dict[str, object],
+    values: dict[str, object],
     payload: dict[str, object],
 ) -> None:
-    database_url = os.environ["TRANSCRIBER_DATABASE_URL"]
-    values = {"job_id": job_id, "status": status, **parameters}
-    with psycopg.connect(database_url) as connection, connection.transaction():
-        connection.execute(
-            f"""
-            UPDATE transcription_jobs
-            SET status = %(status)s, updated_at = NOW(), {updates}
-            WHERE id = %(job_id)s
-            """,
-            values,
+    occurred_at = datetime.now(UTC)
+    typed_job_id = UUID(job_id)
+    with _get_sessions().begin() as session:
+        session.execute(
+            update(TranscriptionJob)
+            .where(TranscriptionJob.id == typed_job_id)
+            .values(status=status, updated_at=occurred_at, **values)
         )
-        connection.execute(
-            """
-            INSERT INTO transcription_job_events (
-                job_id, status, occurred_at, payload
-            ) VALUES (%(job_id)s, %(status)s, NOW(), %(payload)s)
-            """,
-            {
-                "job_id": job_id,
-                "status": status,
-                "payload": Jsonb(payload),
-            },
+        session.add(
+            TranscriptionJobEvent(
+                job_id=typed_job_id,
+                status=status,
+                occurred_at=occurred_at,
+                payload=payload,
+            )
         )
 
 

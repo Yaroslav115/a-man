@@ -1,5 +1,17 @@
 # Task Journal
 
+## 2026-08-05 — Adopt SQLAlchemy and Alembic
+
+- Request: Prepare the growing project for a larger persistence model by
+  replacing direct SQL and the custom migration runner.
+- Result:
+  - Added shared typed SQLAlchemy 2.x mappings for transcription jobs/events.
+  - Converted the FastAPI repository to async SQLAlchemy sessions and Celery
+    lifecycle updates to synchronous SQLAlchemy sessions.
+  - Replaced numbered SQL files and `schema_migrations` with Alembic; baseline
+    revision `0001` adopts an existing legacy schema without recreating it.
+  - Preserved the one-shot Compose migration service and PostgreSQL/Psycopg 3.
+
 ## 2026-08-04 — Formalize Python 3.11+ support
 
 - Status: completed

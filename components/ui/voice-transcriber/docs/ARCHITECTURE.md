@@ -54,6 +54,12 @@ AOF data, uploaded audio, and downloaded Whisper models. The API and worker
 share the audio volume; only the worker mounts the model cache. Health checks
 gate startup on PostgreSQL migration completion and Redis availability.
 
+SQLAlchemy 2.x defines the shared persistence schema. The API uses async
+sessions and the Celery worker uses synchronous sessions through Psycopg 3.
+Alembic owns ordered schema revisions and runs as the one-shot migration
+service. Revision `0001` safely adopts databases created by the former SQL
+migration runner as its baseline.
+
 The default worker image installs CPU-only PyTorch. GPU-specific images and
 Compose overrides remain future work.
 
@@ -104,7 +110,7 @@ The task record should eventually include:
 - Requesting user/session reference, subject to privacy requirements
 - Correlation identifier for logs and traces
 
-Migration `001_create_transcription_jobs.sql` establishes the initial
+Alembic revision `0001_create_transcription_jobs` establishes the initial
 `transcription_jobs` record and append-only `transcription_job_events` journal.
 The worker records processing and terminal transitions in both PostgreSQL and
 the Redis state cache.
