@@ -14,4 +14,4 @@ The service index will be maintained here:
 
 | Service | Purpose | Status | Document |
 |---|---|---|---|
-| Voice Transcriber | Convert audio to text for embedded and standalone use | Structure created | `voice-transcriber.md` |
+| Voice Transcriber | Convert audio to text for an embedded Chat Widget and standalone demo | File backend implemented; WebSocket streaming planned | `voice-transcriber.md` |

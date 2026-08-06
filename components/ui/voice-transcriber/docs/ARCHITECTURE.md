@@ -15,7 +15,7 @@
 ## Component flow
 
 ```text
-Widget or standalone demo
+Reusable Chat Widget or standalone demo host
           ↓
        FastAPI
           ↓
@@ -31,16 +31,70 @@ Widget or standalone demo
  whisper.cpp later
 ```
 
-## Submission contract
+## Client modes
+
+The frontend is one reusable Chat Widget with conversation history, an editable
+message composer, and voice input. It is delivered in two modes:
+
+- The standalone demo is a complete page that hosts the production Chat Widget
+  and adds configuration and diagnostic controls.
+- Embedded mode distributes only the Chat Widget library; the containing
+  application supplies configuration and receives widget events.
+
+Recording, streaming, transcription state, and API code belong to the widget and
+must not be duplicated in the demo host. Voice transcription fills the editable
+composer and never submits a chat message without a user action.
+
+## HTTP submission contract
 
 File transcription uses HTTP rather than WebSocket. The path and upload routes
 persist a job and its initial event in PostgreSQL, cache queued state in Redis,
 publish a Celery message whose task ID equals the public job UUID, and return
 HTTP `202`. Uploaded files are stored on a volume shared by the API and worker.
 
-WebSocket is reserved for a later live-audio streaming feature. A future status
-endpoint or Server-Sent Events stream can expose progress for file jobs without
-coupling submission to a long-lived connection.
+Clients poll `GET /v1/transcriptions/{task_id}` for durable file-job state and
+results. These routes remain supported alongside live streaming for imported
+files, fallback operation, repeatable tests, and recovery.
+
+## WebSocket contract
+
+WebSocket is the target real-time transport for chat, streamed agent responses,
+and live microphone transcription. The Chat Widget owns one connection per
+active conversation rather than opening a second socket for voice. Versioned
+JSON envelopes carry control and text events; binary frames carry encoded audio.
+
+Initial client event types:
+
+- `chat.message.send`
+- `chat.response.cancel`
+- `voice.stream.start`
+- `voice.stream.stop`
+- `voice.stream.cancel`
+- `connection.resume`
+- `ping`
+
+Initial server event types:
+
+- `command.accepted`
+- `chat.response.delta`
+- `chat.response.completed`
+- `voice.transcript.partial`
+- `voice.transcript.final`
+- `task.status.changed`
+- `error`
+- `pong`
+
+Every command uses a UUID `message_id` for acknowledgement and deduplication.
+Server events are ordered by a per-conversation sequence. Reconnection uses the
+last received sequence; durable HTTP history and task lookup reconcile state if
+the server cannot replay the complete gap.
+
+After `voice.stream.start` is accepted, binary audio frames belong to the
+negotiated stream until a final stop, cancellation, error, timeout, or
+disconnect. Start metadata declares stream ID, MIME/codec, sample rate, and
+channels. Implementations must define frame-size limits, backpressure, idle and
+maximum-duration timeouts, authentication, origin validation, and per-user
+concurrency limits before production use.
 
 PostgreSQL is the durable source of truth. Redis contains transient queue data
 and a TTL-bound current-state cache; losing Redis state must not erase the job
@@ -117,3 +171,11 @@ the Redis state cache.
 
 Sensitive audio, transcript content, secrets, and credentials must not be copied
 into audit events unnecessarily. Retention and deletion rules remain TBD.
+
+## Delivery status
+
+The HTTP file workflow, task worker, persistence, status lookup, and local
+Compose backend are implemented. The Chat Widget, demo host, Controller
+WebSocket endpoint, live-audio transport, partial transcription, reconnect
+replay, and cancellation protocol described above are the accepted target
+architecture and remain to be implemented.

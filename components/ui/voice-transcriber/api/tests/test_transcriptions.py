@@ -12,9 +12,15 @@ from app.domain.models import (
     AudioSourceType,
     JobStatus,
     TranscriptionJobAccepted,
+    TranscriptionJobStatus,
     TranscriptionOptions,
 )
-from app.main import app, get_audio_storage, get_submission_service
+from app.main import (
+    app,
+    get_audio_storage,
+    get_job_repository,
+    get_submission_service,
+)
 from fastapi.testclient import TestClient
 
 TASK_ID = UUID("a19d42c3-1cd7-47ca-ad4d-53d9068e564a")
@@ -45,6 +51,14 @@ class FakeSubmissionService:
         )
 
 
+class FakeJobRepository:
+    def __init__(self) -> None:
+        self.jobs: dict[UUID, TranscriptionJobStatus] = {}
+
+    async def get(self, job_id: UUID) -> TranscriptionJobStatus | None:
+        return self.jobs.get(job_id)
+
+
 @pytest.fixture
 def submission_service() -> FakeSubmissionService:
     return FakeSubmissionService()
@@ -61,6 +75,17 @@ def client(
     app.dependency_overrides[get_audio_storage] = lambda: LocalAudioStorage(
         tmp_path / "uploads"
     )
+    repository = FakeJobRepository()
+    repository.jobs[TASK_ID] = TranscriptionJobStatus(
+        task_id=TASK_ID,
+        status=JobStatus.COMPLETED,
+        audio_path=tmp_path / "sample.wav",
+        created_at=CREATED_AT,
+        updated_at=CREATED_AT,
+        completed_at=CREATED_AT,
+        result={"text": "Hello", "language": "en", "segments": []},
+    )
+    app.dependency_overrides[get_job_repository] = lambda: repository
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -125,5 +150,36 @@ def test_rejects_empty_upload(client: TestClient) -> None:
         "/v1/transcriptions/upload",
         files={"audio": ("empty.wav", b"", "audio/wav")},
     )
+
+    assert response.status_code == 422
+
+
+def test_gets_transcription_status(client: TestClient, tmp_path: Path) -> None:
+    response = client.get(f"/v1/transcriptions/{TASK_ID}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "task_id": str(TASK_ID),
+        "status": "completed",
+        "audio_path": str(tmp_path / "sample.wav"),
+        "created_at": "2026-07-30T12:00:00Z",
+        "updated_at": "2026-07-30T12:00:00Z",
+        "started_at": None,
+        "completed_at": "2026-07-30T12:00:00Z",
+        "failed_at": None,
+        "cancelled_at": None,
+        "result": {"text": "Hello", "language": "en", "segments": []},
+        "error": None,
+    }
+
+
+def test_gets_404_for_unknown_task(client: TestClient) -> None:
+    response = client.get("/v1/transcriptions/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+
+    assert response.status_code == 404
+
+
+def test_rejects_invalid_task_id(client: TestClient) -> None:
+    response = client.get("/v1/transcriptions/not-a-uuid")
 
     assert response.status_code == 422

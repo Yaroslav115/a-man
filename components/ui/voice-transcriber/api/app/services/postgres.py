@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import UUID
 
 from a_man_database.models import TranscriptionJob, TranscriptionJobEvent
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.domain.models import JobStatus, NewTranscriptionJob, utc_now
+from app.domain.models import (
+    JobStatus,
+    NewTranscriptionJob,
+    TranscriptionJobStatus,
+    utc_now,
+)
 
 
 class PostgresJobRepository:
@@ -42,6 +48,29 @@ class PostgresJobRepository:
                 )
             )
             session.add(record)
+
+    async def get(self, job_id: UUID) -> TranscriptionJobStatus | None:
+        """Return the durable current state for a job, if it exists."""
+
+        async with self._sessions() as session:
+            record = await session.scalar(
+                select(TranscriptionJob).where(TranscriptionJob.id == job_id)
+            )
+        if record is None:
+            return None
+        return TranscriptionJobStatus(
+            task_id=record.id,
+            status=JobStatus(record.status),
+            audio_path=Path(record.audio_path),
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            failed_at=record.failed_at,
+            cancelled_at=record.cancelled_at,
+            result=record.result,
+            error=record.error,
+        )
 
     async def mark_queued(self, job_id: UUID) -> None:
         await self._transition(job_id, JobStatus.QUEUED, payload={})

@@ -15,10 +15,13 @@ report.xml
 .venv/
 venv/
 
+node_modules/
+dist/
+*.tsbuildinfo
+
 .env
 .env.*
 !.env.example
 
 .idea/
 .vscode/
-

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -75,6 +76,22 @@ class TranscriptionJobAccepted(BaseModel):
     status: JobStatus = JobStatus.QUEUED
     audio_path: Path
     created_at: datetime
+
+
+class TranscriptionJobStatus(BaseModel):
+    """Durable current state and outcome of a transcription job."""
+
+    task_id: UUID
+    status: JobStatus
+    audio_path: Path
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    failed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    result: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
 
 
 def utc_now() -> datetime:

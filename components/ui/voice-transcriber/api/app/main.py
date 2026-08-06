@@ -51,7 +51,7 @@ def get_celery_app() -> Celery:
 
 def get_submission_service() -> TranscriptionSubmissionService:
     return TranscriptionSubmissionService(
-        PostgresJobRepository(get_session_factory()),
+        get_job_repository(),
         RedisCeleryTaskQueue(
             get_celery_app(),
             get_redis(),
@@ -60,6 +60,10 @@ def get_submission_service() -> TranscriptionSubmissionService:
             ),
         ),
     )
+
+
+def get_job_repository() -> PostgresJobRepository:
+    return PostgresJobRepository(get_session_factory())
 
 
 @lru_cache(maxsize=1)
@@ -75,7 +79,11 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
     application.include_router(
-        create_transcription_router(get_submission_service, get_audio_storage)
+        create_transcription_router(
+            get_submission_service,
+            get_audio_storage,
+            get_job_repository,
+        )
     )
 
     @application.on_event("shutdown")

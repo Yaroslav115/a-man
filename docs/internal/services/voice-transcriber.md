@@ -5,13 +5,13 @@
 | Field | Current value |
 |---|---|
 | Owner | TBD |
-| Status | asynchronous submission and worker core implemented |
+| Status | asynchronous file core implemented; Chat Widget and WebSocket streaming planned |
 | Version | 0.1 |
 | Environment | local development |
 | Repository/path | `components/ui/voice-transcriber/` |
 | Runtime | Docker Compose stack |
 | Deployment target | TBD |
-| Last verified | 2026-07-30 |
+| Last verified | 2026-08-06 |
 
 ## Purpose
 
@@ -23,8 +23,8 @@ remaining usable as a standalone module.
 | Part | Technology | Current state |
 |---|---|---|
 | Reusable widget | Web frontend, TBD | Directory created |
-| Standalone demo | Web frontend, TBD | Directory created |
-| Public backend | FastAPI | Two HTTP submission routes implemented |
+| Standalone demo | React, TypeScript, Vite | Base application and render smoke test implemented |
+| Public backend | FastAPI | Submission and durable job-status routes implemented |
 | Task orchestration | Celery | Transcription task implemented |
 | Queue/broker | Redis | Queue and TTL state cache integrated |
 | Persistent data | PostgreSQL with SQLAlchemy 2.x | Initial Alembic job/event revision implemented |
@@ -41,6 +41,11 @@ replaced by whisper.cpp without changing the public API or task workflow.
 
 - `POST /v1/transcriptions/path` queues a shared server-local path.
 - `POST /v1/transcriptions/upload` persists and queues an uploaded file.
+- `GET /v1/transcriptions/{task_id}` returns durable status and outcome data.
+- The planned Chat Widget uses one Controller WebSocket for conversation events,
+  streamed responses, and live microphone audio.
+- The planned standalone demo hosts that same widget rather than maintaining a
+  separate frontend implementation.
 - `TRANSCRIBER_DATABASE_URL` configures PostgreSQL.
 - `TRANSCRIBER_REDIS_URL` configures the Celery broker/result backend and state.
 - `TRANSCRIBER_AUDIO_ROOT` configures shared uploaded-audio storage.
@@ -70,6 +75,20 @@ the transition from Python Whisper to whisper.cpp.
 
 The exact schema, retention period, and privacy policy are TBD.
 
+## Planned real-time interface
+
+The Controller exposes the planned conversation socket at
+`/v1/conversations/{conversation_id}/stream` and routes voice frames to this
+service. The WebSocket protocol uses versioned JSON command/event envelopes and
+binary audio frames. Commands require unique IDs; server events require ordered
+conversation sequences for acknowledgement, deduplication, reconnect, and
+recovery. PostgreSQL remains authoritative, and HTTP history/task endpoints
+reconcile a client after delivery gaps.
+
+The WebSocket endpoint, chat persistence/controller integration, live-stream
+engine adapter, authentication, origin policy, replay window, frame limits,
+backpressure, and timeouts are not implemented yet.
+
 ## Security
 
 Audio and transcripts may contain sensitive information. Retention, access,
@@ -84,3 +103,5 @@ production use. Secrets must not be stored in this document.
 | 2026-07-30 | Implemented asynchronous API submission, job journal migration, Redis/Celery publication, and worker lifecycle updates | Codex |
 | 2026-08-05 | Replaced direct Psycopg SQL and the custom migration ledger with shared SQLAlchemy mappings and Alembic revisions | Codex |
 | 2026-07-27 | Created initial directory structure and engine-replacement boundary | Codex |
+| 2026-08-06 | Adopted a reusable Chat Widget and WebSocket target architecture for chat streaming and live voice | Codex |
+| 2026-08-06 | Added the minimal React standalone-demo shell and fast render smoke test | Codex |

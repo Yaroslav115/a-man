@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
@@ -10,8 +11,10 @@ from app.domain.models import (
     AudioSourceType,
     PathTranscriptionRequest,
     TranscriptionJobAccepted,
+    TranscriptionJobStatus,
     TranscriptionOptions,
 )
+from app.services.postgres import PostgresJobRepository
 from app.services.storage import LocalAudioStorage
 from app.services.transcription import TranscriptionSubmissionService
 
@@ -19,6 +22,7 @@ from app.services.transcription import TranscriptionSubmissionService
 def create_transcription_router(
     get_submission_service: Callable[[], TranscriptionSubmissionService],
     get_audio_storage: Callable[[], LocalAudioStorage],
+    get_job_repository: Callable[[], PostgresJobRepository],
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/transcriptions", tags=["transcriptions"])
 
@@ -83,6 +87,22 @@ def create_transcription_router(
             raise
         finally:
             await audio.close()
+
+    @router.get("/{task_id}", response_model=TranscriptionJobStatus)
+    async def get_transcription(
+        task_id: UUID,
+        repository: Annotated[
+            PostgresJobRepository,
+            Depends(get_job_repository),
+        ],
+    ) -> TranscriptionJobStatus:
+        job = await repository.get(task_id)
+        if job is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transcription job does not exist",
+            )
+        return job
 
     return router
 

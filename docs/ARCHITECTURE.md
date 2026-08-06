@@ -5,9 +5,9 @@
 | Field | Current value |
 |---|---|
 | Status | Initial draft |
-| Architecture version | 0.3 |
-| Last updated | 2026-07-28 |
-| Last verified | 2026-07-28 |
+| Architecture version | 0.4 |
+| Last updated | 2026-08-06 |
+| Last verified | 2026-08-06 |
 
 This is the canonical system-wide architecture document. It describes how all
 agents, services, data stores, interfaces, and infrastructure fit together.
@@ -153,6 +153,42 @@ Schemas, consistency requirements, backup strategy, and migration rules are TBD.
 | Agent | Controller | Agent response/status | TBD | TBD |
 | Controller | UI | Displayable/performable output | TBD | TBD |
 
+### UI real-time transport
+
+The reusable Chat Widget maintains one authenticated WebSocket connection at
+`/v1/conversations/{conversation_id}/stream` to the Controller for an active
+conversation. The connection carries versioned JSON
+events for user messages, streamed agent output, voice-stream control and audio
+chunks, acknowledgements, status changes, cancellation, errors, and heartbeat
+traffic. The standalone demo hosts the same Chat Widget and uses the same
+protocol; it does not implement a separate chat client.
+
+HTTP remains the durable request/response interface for conversation history,
+file upload, completed transcription lookup, health checks, and recovery after a
+disconnected WebSocket. PostgreSQL remains authoritative; WebSocket delivery is
+not itself durable. Every client-originated command has a unique `message_id`,
+and server events carry a monotonically increasing conversation sequence so a
+client can reconnect with its last received sequence and reconcile missed state.
+
+The initial WebSocket envelope is:
+
+```json
+{
+  "version": 1,
+  "type": "chat.message.send",
+  "message_id": "uuid",
+  "conversation_id": "uuid",
+  "sequence": null,
+  "timestamp": "RFC-3339 timestamp",
+  "payload": {}
+}
+```
+
+Binary WebSocket frames carry live audio only after a `voice.stream.start`
+command establishes encoding, sample rate, channel count, and stream ID. JSON
+control frames never contain base64 audio. File-based recordings continue to
+use the existing HTTP transcription API.
+
 All interfaces should define authentication, authorization, validation, error
 semantics, retry safety, timeouts, and compatibility expectations.
 
@@ -226,6 +262,26 @@ when versioned packages and deployable services exist.
 8. The UI presents the result using the appropriate output mode.
 9. The controller records relevant task state and audit information.
 
+For an interactive chat session, steps 2–8 use the Chat Widget's WebSocket. The
+Controller acknowledges accepted user messages, streams ordered response deltas,
+and emits a terminal message event. On reconnect, the UI supplies the last
+received sequence and retrieves durable history over HTTP if replay is not
+available.
+
+### Live voice-to-chat interaction
+
+1. The Chat Widget opens or reuses its authenticated conversation WebSocket.
+2. The user starts recording and the widget sends `voice.stream.start`.
+3. The widget sends encoded microphone chunks as binary frames with bounded
+   client buffering and backpressure handling.
+4. The Controller routes the stream to the Voice Transcriber and returns partial
+   and final transcript events.
+5. The final transcript is placed in the editable chat composer; it is not sent
+   to an agent automatically.
+6. The user edits and sends the message through the normal chat message event.
+7. Stop, cancellation, timeout, disconnect, and permission failures produce
+   explicit terminal events and release stream resources.
+
 Workflows for changing the selected agent, failure recovery, cancellation, and
 scheduled tasks are TBD.
 
@@ -242,6 +298,8 @@ record process is introduced.
 | 2026-07-27 | Connect an interaction to one agent | Defines the initial routing model and avoids premature multi-agent complexity | Accepted |
 | 2026-07-28 | Use pytest as the global test framework and runner | Provides one Python entry point while preserving component-owned suites | Accepted |
 | 2026-07-28 | Use GitLab CI/CD with incremental pipeline stages | Gives immediate validation without pretending unimplemented packaging or deployment exists | Accepted |
+| 2026-08-06 | Use WebSocket as the Chat Widget's real-time conversation and live-audio transport | Supports streamed agent output, partial transcription, interruption, and future bidirectional interaction over one session | Accepted |
+| 2026-08-06 | Retain HTTP beside WebSocket for durable resources and recovery | Keeps uploads, history, lookup, health, and reconnect reconciliation explicit and retryable | Accepted |
 
 ## 14. Risks and Open Questions
 
@@ -261,7 +319,7 @@ The authoritative per-service records are stored in `internal/services/`.
 
 | Service | Responsibility | Dependencies | Status | Documentation |
 |---|---|---|---|---|
-| Voice Transcriber | Convert UI audio input to text through a reusable widget and backend stack | FastAPI, PostgreSQL, Redis, Celery, replaceable Whisper engine | Structure created | `internal/services/voice-transcriber.md` |
+| Voice Transcriber | Convert UI audio input to text for the reusable Chat Widget and standalone demo | FastAPI, WebSocket/HTTP, PostgreSQL, Redis, Celery, replaceable Whisper engine | Asynchronous file backend implemented; live streaming planned | `internal/services/voice-transcriber.md` |
 
 ## 16. Change History
 
@@ -272,3 +330,4 @@ The authoritative per-service records are stored in `internal/services/`.
 | 2026-07-27 | 0.2 | Added Voice Transcriber as the first UI subcomponent |
 | 2026-07-28 | 0.3 | Established the global pytest structure and test entry point |
 | 2026-07-28 | 0.3 | Added the initial GitLab validation and test pipeline |
+| 2026-08-06 | 0.4 | Adopted WebSocket for real-time chat and live voice while retaining HTTP for durable operations and recovery |

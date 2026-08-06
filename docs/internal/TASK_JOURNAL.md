@@ -1,5 +1,49 @@
 # Task Journal
 
+## 2026-08-06 — Add the base React demo frontend
+
+- Status: completed.
+- Request: Start the demo frontend without widgets and verify it with a small,
+  fast test.
+- Changes: Added a React and TypeScript application shell built by Vite, a
+  minimal ready-state page, and one Vitest/Testing Library render smoke test.
+- Scope: No chat, voice, microphone, WebSocket, or backend integration is
+  included in this slice.
+- Verification: The single test passes in under one second, the production build
+  succeeds, and `npm audit` reports zero vulnerabilities after updating Vite and
+  Vitest to patched releases.
+
+## 2026-08-06 — Adopt WebSocket chat and live-voice architecture
+
+- Status: architecture documented; implementation pending.
+- Request: Make the reusable widget chat-capable, support a standalone demo and
+  embedded mode, and adopt WebSocket transport.
+- Decision: Build one reusable Chat Widget containing history, an editable
+  composer, and voice input. The standalone demo hosts that same widget.
+- Decision: Use one authenticated conversation WebSocket for chat commands,
+  streamed agent responses, live-audio control, and binary microphone frames.
+- Decision: Retain HTTP for recorded-file upload, durable task/result lookup,
+  conversation history, health checks, and reconnect reconciliation.
+- Contract direction: Versioned JSON envelopes, UUID command IDs, ordered server
+  sequences, acknowledgements, deduplication, heartbeat, explicit terminal
+  events, and reconnect/resume semantics.
+- Constraint: A final voice transcript fills the editable composer and is never
+  automatically submitted to an agent.
+- Next: Define the versioned protocol schemas and Controller ownership, then
+  implement the Chat Widget, demo host, WebSocket gateway, and live-stream
+  transcriber adapter with integration tests.
+
+## 2026-08-06 — Add durable transcription status lookup
+
+- Status: completed; runtime verification requires Python 3.11 or 3.12.
+- Request: Retrieve the status of the task ID returned by transcription
+  submission.
+- Changes: Added `GET /v1/transcriptions/{task_id}`, a PostgreSQL repository
+  lookup, response models for lifecycle timestamps and terminal result/error
+  data, and API coverage for success, unknown IDs, and invalid UUIDs.
+- Verification: Ruff, mypy, and diff checks pass. The host's Python 3.10 cannot
+  collect the Python 3.11+ test suite.
+
 ## 2026-08-05 — Adopt SQLAlchemy and Alembic
 
 - Request: Prepare the growing project for a larger persistence model by
@@ -51,9 +95,10 @@
 - Status: completed
 - Request: Create the FastAPI backend with one server-path route and one upload
   route, and process audio asynchronously through Redis, Celery, and PostgreSQL.
-- Decision: Keep file submission on HTTP. Reserve WebSocket for future live
-  microphone streaming; use a future status endpoint or Server-Sent Events for
-  file-job progress.
+- Decision: Keep file submission on HTTP. At the time, WebSocket was reserved
+  for future live microphone streaming and status delivery was undecided. The
+  2026-08-06 architecture decision supersedes the real-time portion: WebSocket
+  now carries chat and live voice, while file-job status uses durable HTTP.
 - Changes:
   - Added two HTTP `202` submission routes with a shared response contract.
   - Persist uploaded audio to worker-visible storage before submission.

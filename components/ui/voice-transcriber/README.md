@@ -5,8 +5,9 @@ be embedded as a widget in A-Man or run independently through its demo frontend.
 
 The first runtime slice implements asynchronous file submission through FastAPI,
 durable PostgreSQL job journaling, Redis/Celery queue publication, and a Python
-Whisper Celery task. Deployment configuration and job-query APIs remain to be
-implemented.
+Whisper Celery task. Durable job-status and result lookup is available through
+the API. A reusable Chat Widget, standalone demo host, and WebSocket-based live
+audio/chat transport are the next planned runtime slice.
 
 ## Structure
 
@@ -32,6 +33,10 @@ Both endpoints return HTTP `202` with `task_id`, `status`, `audio_path`, and
   to both the API and worker.
 - `POST /v1/transcriptions/upload` accepts multipart field `audio`; the API saves
   it under `TRANSCRIBER_AUDIO_ROOT` before queueing it.
+
+Use `GET /v1/transcriptions/{task_id}` to read the durable current status. A
+completed response includes the normalized transcription in `result`; a failed
+response includes normalized failure details in `error`.
 
 Required runtime settings are `TRANSCRIBER_DATABASE_URL` and
 `TRANSCRIBER_REDIS_URL`. The API and worker must share the configured audio
@@ -67,3 +72,31 @@ workflow.
 
 The API and task worker must depend on a stable transcription contract, not on a
 specific Whisper implementation.
+
+## Planned Chat Widget and WebSocket mode
+
+One reusable Chat Widget will provide message history, an editable composer, and
+voice input. The standalone demo will host this same widget; embedded mode will
+ship the widget without a separate application shell.
+
+The widget will use one conversation WebSocket for chat commands, streamed agent
+responses, live microphone control, and binary audio chunks. HTTP remains the
+interface for file uploads, durable task lookup, history, health, and reconnect
+recovery. The current repository implements the HTTP transcription workflow;
+the WebSocket and frontend portions are documented architecture, not yet runtime
+functionality.
+
+## Demo frontend
+
+The standalone demo currently contains a minimal React application shell. It
+does not contain chat or voice widgets yet. Run its fast render test and
+production build with:
+
+```bash
+cd components/ui/voice-transcriber/demo
+npm install
+npm test
+npm run build
+```
+
+For local development, run `npm run dev` and open the URL printed by Vite.
