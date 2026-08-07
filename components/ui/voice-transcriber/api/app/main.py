@@ -103,9 +103,14 @@ def create_app() -> FastAPI:
 
     @application.on_event("shutdown")
     async def close_connections() -> None:
-        if get_submission_service not in application.dependency_overrides:
+        if get_redis.cache_info().currsize:
             await get_redis().aclose()
+            get_redis.cache_clear()
+
+        if get_engine.cache_info().currsize:
             await get_engine().dispose()
+            get_engine.cache_clear()
+            get_session_factory.cache_clear()
 
     return application
 
