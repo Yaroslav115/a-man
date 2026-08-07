@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.routes.config import create_config_router
 from app.routes.transcriptions import create_transcription_router
+from app.services.config import AudioRecordConfigStore
 from app.services.postgres import PostgresJobRepository
 from app.services.queue import RedisCeleryTaskQueue
 from app.services.storage import LocalAudioStorage
@@ -73,6 +75,18 @@ def get_audio_storage() -> LocalAudioStorage:
     )
 
 
+@lru_cache(maxsize=1)
+def get_audio_record_config_store() -> AudioRecordConfigStore:
+    return AudioRecordConfigStore(
+        Path(
+            os.getenv(
+                "TRANSCRIBER_CONFIG_PATH",
+                "/var/lib/a-man/config/audio-record.json",
+            )
+        )
+    )
+
+
 def create_app() -> FastAPI:
     application = FastAPI(
         title="A-Man Voice Transcriber API",
@@ -85,6 +99,7 @@ def create_app() -> FastAPI:
             get_job_repository,
         )
     )
+    application.include_router(create_config_router(get_audio_record_config_store))
 
     @application.on_event("shutdown")
     async def close_connections() -> None:

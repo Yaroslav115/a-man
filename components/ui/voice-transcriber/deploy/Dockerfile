@@ -9,7 +9,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 
 RUN groupadd --system transcriber \
     && useradd --system --gid transcriber --create-home transcriber
-RUN mkdir -p /data/audio \
+RUN mkdir -p /data/audio /data/config \
     && chown -R transcriber:transcriber /data
 
 WORKDIR /opt/a-man

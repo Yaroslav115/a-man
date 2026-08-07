@@ -86,11 +86,21 @@ recovery. The current repository implements the HTTP transcription workflow;
 the WebSocket and frontend portions are documented architecture, not yet runtime
 functionality.
 
-## Demo frontend
+## Browser recorder and demo frontend
 
-The standalone demo currently contains a minimal React application shell. It
-does not contain chat or voice widgets yet. Run its fast render test and
-production build with:
+The reusable React recorder lives under `widget/`. It uses the browser
+`MediaRecorder` API and supports click-to-record and configurable keyboard
+push-to-talk. The standalone demo hosts the recorder, lets users play or
+download the latest recording, and contains a Config page with a horizontal
+Audio Record tab.
+
+Recorder settings are read and written through `GET` and `PUT`
+`/v1/config/audio-record`. The API persists JSON atomically at
+`TRANSCRIBER_CONFIG_PATH`, which defaults to
+`/var/lib/a-man/config/audio-record.json`. The Vite development server proxies
+`/v1` to the API on port 8000.
+
+Run the frontend tests and production build with:
 
 ```bash
 cd components/ui/voice-transcriber/demo

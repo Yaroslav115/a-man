@@ -30,6 +30,13 @@ class AudioSourceType(StrEnum):
     UPLOAD = "upload"
 
 
+class AudioRecordConfig(BaseModel):
+    """User-editable behavior of the browser audio recorder."""
+
+    push_to_talk_enabled: bool = False
+    push_to_talk_key: str = Field(default="Space", min_length=1, max_length=64)
+
+
 class TranscriptionOptions(BaseModel):
     """Engine-independent transcription options."""
 
